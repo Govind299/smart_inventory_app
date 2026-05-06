@@ -79,7 +79,7 @@ class _StockUpdateScreenState extends ConsumerState<StockUpdateScreen> {
         const Text('Select Product', style: TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         DropdownButtonFormField<Product>(
-          value: selectedProduct,
+          value: products.contains(selectedProduct) ? selectedProduct : null,
           decoration: InputDecoration(prefixIcon: const Icon(LucideIcons.package), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
           hint: const Text('Choose a product'),
           items: products.map((e) => DropdownMenuItem(value: e, child: Text(e.name))).toList(),
