@@ -1,13 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:smart_inventory_app/core/theme.dart';
+import 'package:smart_inventory_app/services/inventory_provider.dart';
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final products = ref.watch(productProvider);
+    final lowStock = ref.watch(lowStockProductsProvider);
+    final criticalStock = ref.watch(criticalStockProductsProvider);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Smart Inventory', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -23,21 +29,17 @@ class DashboardScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildStatOverview(),
+            _buildStatOverview(products.length, lowStock.length, criticalStock.length),
             const SizedBox(height: 24),
-            const Text(
-              'Quick Actions',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
+            const Text('Quick Actions', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             _buildQuickActions(context),
             const SizedBox(height: 24),
-            const Text(
-              'Stock Status',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
+            const Text('Stock Status', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
-            _buildStockStatusList(),
+            products.isEmpty 
+              ? const Center(child: Padding(padding: EdgeInsets.all(40), child: Text('No products found. Add some!')))
+              : Column(children: products.take(5).map((p) => _StockStatusItem(product: p)).toList()),
           ],
         ),
       ),
@@ -59,14 +61,14 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildStatOverview() {
+  Widget _buildStatOverview(int total, int low, int critical) {
     return Row(
       children: [
-        _StatCard(title: 'Total', value: '42', icon: LucideIcons.package, color: AppTheme.primaryColor),
+        _StatCard(title: 'Total', value: '$total', icon: LucideIcons.package, color: AppTheme.primaryColor),
         const SizedBox(width: 12),
-        _StatCard(title: 'Low Stock', value: '5', icon: LucideIcons.alertTriangle, color: AppTheme.warningColor),
+        _StatCard(title: 'Low Stock', value: '$low', icon: LucideIcons.alertTriangle, color: AppTheme.warningColor),
         const SizedBox(width: 12),
-        _StatCard(title: 'Critical', value: '2', icon: LucideIcons.alertCircle, color: AppTheme.dangerColor),
+        _StatCard(title: 'Critical', value: '$critical', icon: LucideIcons.alertCircle, color: AppTheme.dangerColor),
       ],
     );
   }
@@ -74,33 +76,11 @@ class DashboardScreen extends StatelessWidget {
   Widget _buildQuickActions(BuildContext context) {
     return Row(
       children: [
-        _ActionButton(
-          label: 'Add Product',
-          icon: LucideIcons.plus,
-          onTap: () => context.push('/products'),
-        ),
+        _ActionButton(label: 'Add Product', icon: LucideIcons.plus, onTap: () => context.push('/products')),
         const SizedBox(width: 12),
-        _ActionButton(
-          label: 'Stock In',
-          icon: LucideIcons.arrowDownCircle,
-          onTap: () => context.push('/stock-update'),
-        ),
+        _ActionButton(label: 'Stock In', icon: LucideIcons.arrowDownCircle, onTap: () => context.push('/stock-update')),
         const SizedBox(width: 12),
-        _ActionButton(
-          label: 'Stock Out',
-          icon: LucideIcons.arrowUpCircle,
-          onTap: () => context.push('/stock-update'),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStockStatusList() {
-    return Column(
-      children: [
-        _StockStatusItem(name: 'Surgical Gloves', category: 'Medical', qty: 150, status: 'Normal'),
-        _StockStatusItem(name: 'Beaker 500ml', category: 'Labware', qty: 12, status: 'Low'),
-        _StockStatusItem(name: 'Ethanol 95%', category: 'Chemicals', qty: 2, status: 'Critical'),
+        _ActionButton(label: 'Stock Out', icon: LucideIcons.arrowUpCircle, onTap: () => context.push('/stock-update')),
       ],
     );
   }
@@ -111,7 +91,6 @@ class _StatCard extends StatelessWidget {
   final String value;
   final IconData icon;
   final Color color;
-
   const _StatCard({required this.title, required this.value, required this.icon, required this.color});
 
   @override
@@ -142,7 +121,6 @@ class _ActionButton extends StatelessWidget {
   final String label;
   final IconData icon;
   final VoidCallback onTap;
-
   const _ActionButton({required this.label, required this.icon, required this.onTap});
 
   @override
@@ -153,18 +131,8 @@ class _ActionButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade200),
-          ),
-          child: Column(
-            children: [
-              Icon(icon, color: AppTheme.primaryColor),
-              const SizedBox(height: 8),
-              Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-            ],
-          ),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
+          child: Column(children: [Icon(icon, color: AppTheme.primaryColor), const SizedBox(height: 8), Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500))]),
         ),
       ),
     );
@@ -172,25 +140,18 @@ class _ActionButton extends StatelessWidget {
 }
 
 class _StockStatusItem extends StatelessWidget {
-  final String name;
-  final String category;
-  final int qty;
-  final String status;
-
-  const _StockStatusItem({required this.name, required this.category, required this.qty, required this.status});
+  final dynamic product;
+  const _StockStatusItem({required this.product});
 
   @override
   Widget build(BuildContext context) {
+    final status = product.quantity == 0 ? 'Critical' : (product.quantity <= product.minThreshold ? 'Low' : 'Normal');
     final statusColor = status == 'Normal' ? AppTheme.successColor : (status == 'Low' ? AppTheme.warningColor : AppTheme.dangerColor);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))],
-      ),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))]),
       child: Row(
         children: [
           Container(
@@ -203,15 +164,15 @@ class _StockStatusItem extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                Text(category, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                Text(product.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text(product.category, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
               ],
             ),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text('$qty units', style: const TextStyle(fontWeight: FontWeight.bold)),
+              Text('${product.quantity} units', style: const TextStyle(fontWeight: FontWeight.bold)),
               Text(status, style: TextStyle(fontSize: 12, color: statusColor, fontWeight: FontWeight.w600)),
             ],
           ),

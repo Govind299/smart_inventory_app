@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:smart_inventory_app/core/theme.dart';
+import 'package:smart_inventory_app/models/inventory_models.dart';
+import 'package:smart_inventory_app/services/inventory_provider.dart';
 
-class ProductManagementScreen extends StatelessWidget {
+class ProductManagementScreen extends ConsumerWidget {
   const ProductManagementScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final products = ref.watch(productProvider);
+
     return Scaffold(
       appBar: AppBar(title: const Text('Manage Products')),
       body: Column(
@@ -24,16 +29,18 @@ class ProductManagementScreen extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: 10,
-              itemBuilder: (context, index) => _ProductTile(index: index),
-            ),
+            child: products.isEmpty 
+              ? const Center(child: Text('No products yet. Click + to add.'))
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: products.length,
+                  itemBuilder: (context, index) => _ProductTile(product: products[index]),
+                ),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddProductDialog(context),
+        onPressed: () => _showAddProductDialog(context, ref),
         label: const Text('New Product'),
         icon: const Icon(LucideIcons.plus),
         backgroundColor: AppTheme.primaryColor,
@@ -42,7 +49,12 @@ class ProductManagementScreen extends StatelessWidget {
     );
   }
 
-  void _showAddProductDialog(BuildContext context) {
+  void _showAddProductDialog(BuildContext context, WidgetRef ref) {
+    final nameController = TextEditingController();
+    final categoryController = TextEditingController();
+    final qtyController = TextEditingController();
+    final thresholdController = TextEditingController();
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -55,20 +67,33 @@ class ProductManagementScreen extends StatelessWidget {
           children: [
             const Text('Add New Product', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 20),
-            _buildField('Product Name', LucideIcons.package),
-            _buildField('Category', LucideIcons.tag),
+            _buildField('Product Name', LucideIcons.package, nameController),
+            _buildField('Category', LucideIcons.tag, categoryController),
             Row(
               children: [
-                Expanded(child: _buildField('Initial Qty', LucideIcons.hash)),
+                Expanded(child: _buildField('Initial Qty', LucideIcons.hash, qtyController, keyboardType: TextInputType.number)),
                 const SizedBox(width: 12),
-                Expanded(child: _buildField('Min Threshold', LucideIcons.alertTriangle)),
+                Expanded(child: _buildField('Min Threshold', LucideIcons.alertTriangle, thresholdController, keyboardType: TextInputType.number)),
               ],
             ),
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: () {
+                  if (nameController.text.isEmpty || categoryController.text.isEmpty || qtyController.text.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please fill all required fields')));
+                    return;
+                  }
+                  final product = Product.create(
+                    name: nameController.text,
+                    category: categoryController.text,
+                    quantity: int.tryParse(qtyController.text) ?? 0,
+                    minThreshold: int.tryParse(thresholdController.text) ?? 5,
+                  );
+                  ref.read(productProvider.notifier).addProduct(product);
+                  Navigator.pop(context);
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primaryColor,
                   foregroundColor: Colors.white,
@@ -85,10 +110,12 @@ class ProductManagementScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildField(String label, IconData icon) {
+  Widget _buildField(String label, IconData icon, TextEditingController controller, {TextInputType keyboardType = TextInputType.text}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: TextField(
+        controller: controller,
+        keyboardType: keyboardType,
         decoration: InputDecoration(
           labelText: label,
           prefixIcon: Icon(icon, size: 20),
@@ -99,12 +126,12 @@ class ProductManagementScreen extends StatelessWidget {
   }
 }
 
-class _ProductTile extends StatelessWidget {
-  final int index;
-  const _ProductTile({required this.index});
+class _ProductTile extends ConsumerWidget {
+  final Product product;
+  const _ProductTile({required this.product});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: ListTile(
@@ -112,9 +139,12 @@ class _ProductTile extends StatelessWidget {
           backgroundColor: AppTheme.primaryColor.withOpacity(0.1),
           child: const Icon(LucideIcons.package, color: AppTheme.primaryColor, size: 20),
         ),
-        title: Text('Product ${index + 1}', style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: const Text('Category • SKU: 12345'),
-        trailing: const Icon(LucideIcons.chevronRight),
+        title: Text(product.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+        subtitle: Text('${product.category} • Qty: ${product.quantity}'),
+        trailing: IconButton(
+          icon: const Icon(LucideIcons.trash2, color: AppTheme.dangerColor, size: 20),
+          onPressed: () => ref.read(productProvider.notifier).deleteProduct(product.id),
+        ),
       ),
     );
   }

@@ -1,21 +1,38 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:smart_inventory_app/core/theme.dart';
+import 'package:smart_inventory_app/services/inventory_provider.dart';
 
-class SearchFilterScreen extends StatelessWidget {
+class SearchFilterScreen extends ConsumerStatefulWidget {
   const SearchFilterScreen({super.key});
 
   @override
+  ConsumerState<SearchFilterScreen> createState() => _SearchFilterScreenState();
+}
+
+class _SearchFilterScreenState extends ConsumerState<SearchFilterScreen> {
+  String query = '';
+  String? selectedCategory;
+  
+  @override
   Widget build(BuildContext context) {
+    final products = ref.watch(productProvider);
+    final filteredProducts = products.where((p) {
+      final matchesQuery = p.name.toLowerCase().contains(query.toLowerCase());
+      final matchesCategory = selectedCategory == null || p.category == selectedCategory;
+      return matchesQuery && matchesCategory;
+    }).toList();
+
     return Scaffold(
       appBar: AppBar(title: const Text('Search & Filter')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TextField(
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: TextField(
               autofocus: true,
+              onChanged: (v) => setState(() => query = v),
               decoration: InputDecoration(
                 hintText: 'Search product name...',
                 prefixIcon: const Icon(LucideIcons.search),
@@ -24,45 +41,50 @@ class SearchFilterScreen extends StatelessWidget {
                 fillColor: Colors.grey.shade50,
               ),
             ),
-            const SizedBox(height: 32),
-            const Text('Filter by Category', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 10,
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _FilterChip(label: 'All', isSelected: true),
-                _FilterChip(label: 'Medical'),
-                _FilterChip(label: 'Labware'),
-                _FilterChip(label: 'Chemicals'),
-                _FilterChip(label: 'Equipment'),
-              ],
-            ),
-            const SizedBox(height: 32),
-            const Text('Filter by Stock Status', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            Column(
-              children: [
-                _StatusCheckbox(label: 'Available', color: AppTheme.successColor),
-                _StatusCheckbox(label: 'Low Stock', color: AppTheme.warningColor),
-                _StatusCheckbox(label: 'Out of Stock', color: AppTheme.dangerColor),
-              ],
-            ),
-            const SizedBox(height: 40),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primaryColor,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                const Text('Filter by Category', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 10,
+                  children: [
+                    _FilterChip(
+                      label: 'All', 
+                      isSelected: selectedCategory == null,
+                      onSelected: (v) => setState(() => selectedCategory = null),
+                    ),
+                    ...{for (var p in products) p.category}.map((cat) => _FilterChip(
+                      label: cat,
+                      isSelected: selectedCategory == cat,
+                      onSelected: (v) => setState(() => selectedCategory = cat),
+                    )),
+                  ],
                 ),
-                child: const Text('Apply Filters'),
-              ),
+              ],
             ),
-          ],
-        ),
+          ),
+          const Divider(height: 40),
+          Expanded(
+            child: filteredProducts.isEmpty
+              ? const Center(child: Text('No matching products found.'))
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: filteredProducts.length,
+                  itemBuilder: (context, index) {
+                    final p = filteredProducts[index];
+                    return ListTile(
+                      title: Text(p.name),
+                      subtitle: Text(p.category),
+                      trailing: Text('${p.quantity} units'),
+                    );
+                  },
+                ),
+          ),
+        ],
       ),
     );
   }
@@ -71,36 +93,19 @@ class SearchFilterScreen extends StatelessWidget {
 class _FilterChip extends StatelessWidget {
   final String label;
   final bool isSelected;
-  const _FilterChip({required this.label, this.isSelected = false});
+  final Function(bool) onSelected;
+  const _FilterChip({required this.label, required this.onSelected, this.isSelected = false});
 
   @override
   Widget build(BuildContext context) {
     return FilterChip(
       label: Text(label),
       selected: isSelected,
-      onSelected: (v) {},
+      onSelected: onSelected,
       selectedColor: AppTheme.primaryColor.withOpacity(0.2),
       checkmarkColor: AppTheme.primaryColor,
       labelStyle: TextStyle(color: isSelected ? AppTheme.primaryColor : Colors.black, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-    );
-  }
-}
-
-class _StatusCheckbox extends StatelessWidget {
-  final String label;
-  final Color color;
-  const _StatusCheckbox({required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return CheckboxListTile(
-      value: false,
-      onChanged: (v) {},
-      title: Text(label),
-      secondary: Container(width: 12, height: 12, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-      controlAffinity: ListTileControlAffinity.leading,
-      contentPadding: EdgeInsets.zero,
     );
   }
 }
